@@ -72,6 +72,7 @@ Pass* createLocalCSEPass();
 Pass* createLocalSubtypingPass();
 Pass* createLogExecutionPass();
 Pass* createIntrinsicLoweringPass();
+Pass* createInstrumentFunctionPass();
 Pass* createInstrumentLocalsPass();
 Pass* createInstrumentMemoryPass();
 Pass* createLoopInvariantCodeMotionPass();
