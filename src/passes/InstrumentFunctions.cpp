@@ -34,7 +34,7 @@
 
 namespace wasm {
 
-// function log_execution(functionId: number, label: number): void
+// function log_execution(functionId: number, labelId: number): void
 Name LoggerFunction("log_execution");
 
 
