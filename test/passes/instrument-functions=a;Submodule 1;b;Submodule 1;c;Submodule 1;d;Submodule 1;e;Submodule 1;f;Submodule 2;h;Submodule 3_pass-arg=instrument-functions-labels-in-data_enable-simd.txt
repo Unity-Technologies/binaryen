@@ -12,7 +12,7 @@
  (data $.ro-data0 (i32.const 0) "Hello World\00")
  (data $label_0 (i32.const 12) "Submodule 1\00")
  (data $label_1 (i32.const 24) "Submodule 2\00")
- (data $label_2 (i32.const 36) "Submodule 3\00\00")
+ (data $label_2 (i32.const 36) "Submodule 3\00")
  (export "a" (func $a))
  (export "b" (func $b))
  (export "c" (func $c))

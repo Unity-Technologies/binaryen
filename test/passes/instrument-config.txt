@@ -1,7 +1,0 @@
-a;Submodule 1
-b;Submodule 1
-c;Submodule 1
-d;Submodule 1
-e;Submodule 1
-f;Submodule 2
-h;Submodule 3

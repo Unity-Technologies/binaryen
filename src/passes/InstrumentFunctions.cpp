@@ -40,16 +40,24 @@ Name LoggerFunction("log_execution");
 
 struct InstrumentFunctions : public WalkerPass<PostWalker<InstrumentFunctions>> {
     void doWalkModule(Module* curr) {
-        Name configuration = getPassRunner()->options.getArgument(
+        auto& options = getPassOptions();
+        std::string configuration = options.getArgument(
             "instrument-functions",
             "InstrumentFunctions usage: wasm-opt "
             "--instrument-functions=CONFIG");
 
+        bool labelsInDataSections = options.hasArgument("instrument-functions-labels-in-data");
+        std::string labelsFile = options.getArgumentOrDefault("instrument-functions-labels-file", "labels.json");
+
         parseConfiguration(configuration);
-        insertLabelsToDataSection(curr);
+        if (labelsInDataSections) {
+            insertLabelsToDataSection(curr);
+        } else {
+            writeLabelsToJsonFile(labelsFile);
+        }
 
         // Add import of external log function
-        auto loggerFunctionImport = Builder::makeFunction(LoggerFunction, Signature(Type { Type::i32, Type::i32 }, Type::none), { });        
+        auto loggerFunctionImport = Builder::makeFunction(LoggerFunction, Signature(Type { Type::i32, Type::i32 }, Type::none), { });
         loggerFunctionImport->base = LoggerFunction;
 
         // Add it to "env" module if present
@@ -83,43 +91,42 @@ struct InstrumentFunctions : public WalkerPass<PostWalker<InstrumentFunctions>> 
     }
 
     void visitFunction(Function* curr) {
-        // Don't instrument imported functions
-        if (curr->imported()) {
-            return;
-        }
-
-        // if (auto* block = curr->body->dynCast<Block>()) {
-
-        // }
-
         Index functionIndex = m_FunctionIndexMap[curr];
+
+        // Check if function should be instrumented
         auto it = m_FunctionToLabelMap.find(curr->name);
         if (it == m_FunctionToLabelMap.end()) {
             return;
         }
 
+        // Inject a call to the log function with (functionIndex, labelIndex)
+        // parameters
         std::string label = it->second;
         Index labelIndex = m_LabelOffsetMap[label];
         curr->body = createLogCall(curr->body, functionIndex, labelIndex);
     }
 private:
     std::map<std::string, size_t> m_LabelOffsetMap;
-    
+
     Index m_FunctionIndex = 0;
     std::map<Function*, Index> m_FunctionIndexMap;
     std::map<Name, std::string> m_FunctionToLabelMap;
 
-    void parseConfiguration(Name configuration) {
+    void parseConfiguration(const std::string& configuration) {
         m_LabelOffsetMap.clear();
         m_FunctionToLabelMap.clear();
 
         // Load config from file if it starts with @
-        if (configuration.startsWith("@")) {
-            std::string configFile = read_file<std::string>(configuration.toString().substr(1), Flags::Text);
-            std::stringstream stream(configFile);
+        if (configuration[0] == '@') {
+            std::ifstream stream(configuration.substr(1));
 
             // Read config file line by line
+            size_t idx = 0;
             for (std::string line; std::getline(stream, line);) {
+                // Skip empty lines
+                if (line == "")
+                    continue;
+
                 // Find ";" separator
                 size_t separatorIdx = line.find_first_of(";");
                 if (separatorIdx == std::string::npos) {
@@ -128,23 +135,48 @@ private:
                     break;
                 }
                 std::string functionName = line.substr(0, separatorIdx);
-                std::string label = line.substr(separatorIdx + 1, line.length() - separatorIdx - 1);
-                                
+                std::string label = line.substr(separatorIdx + 1);
+
                 // Insert function -> label map entry
                 m_FunctionToLabelMap[functionName] = label;
 
-                // Add entry for label with initial data section offset 0 (will be updated)
+                // Add entry for label. Use index (will be replaced by offset if labels are placed in data section)
                 if (m_LabelOffsetMap.find(label) == m_LabelOffsetMap.end()) {
-                    m_LabelOffsetMap[label] = 0;
+                    m_LabelOffsetMap[label] = idx++;
                 }
             }
 
 
             return;
-        }
+        } else {
+            // Parse configuration from string
+            size_t idx = 0;
+            size_t i = 0;
+            while (i < configuration.length()) {
+                size_t separatorIdx = configuration.find_first_of(";", i);
+                if (separatorIdx == std::string::npos) {
+                    Fatal() << "Invalid configuration \"" << configuration << "\"";
+                    break;
+                }
 
-        // Only configuration from File is supported
-        Fatal() << "Unable to load configuration --instrument-functions=" << configuration;
+                size_t nextSeparatorIdx = configuration.find_first_of(";", separatorIdx + 1);
+                if (nextSeparatorIdx == std::string::npos) {
+                    // We reached the end of the config
+                    nextSeparatorIdx = configuration.length();
+                }
+                std::string functionName = configuration.substr(i, separatorIdx - i);
+                std::string label = configuration.substr(separatorIdx + 1, nextSeparatorIdx - separatorIdx - 1);
+                i = nextSeparatorIdx + 1;
+
+                // Insert function -> label map entry
+                m_FunctionToLabelMap[functionName] = label;
+
+                // Add entry for label. Use index (will be replaced by offset if labels are placed in data section)
+                if (m_LabelOffsetMap.find(label) == m_LabelOffsetMap.end()) {
+                    m_LabelOffsetMap[label] = idx++;
+                }
+            }
+        }
     }
 
     void insertLabelsToDataSection(Module* module) {
@@ -161,15 +193,15 @@ private:
                 size_t endOfDataSection = offsetExpression->value.geti32() + dataSegment->data.size();
                 offset = std::max(offset, endOfDataSection);
             }
-            
+
             // Use memory name of first data section
             if (memoryName == "0")
                 memoryName = dataSegment->memory;
         }
 
-        // Insert function labels at the end of existing data section        
+        // Insert function labels at the end of existing data section
         size_t idx = 0;
-        for (auto it = m_LabelOffsetMap.begin(); it != m_LabelOffsetMap.end(); it++) {            
+        for (auto it = m_LabelOffsetMap.begin(); it != m_LabelOffsetMap.end(); it++) {
             std::stringstream dataSegmentName;
             dataSegmentName << "label_" << idx;
             auto dataSegment = builder.makeDataSegment(
@@ -179,7 +211,7 @@ private:
                 builder.makeConst(Literal::makeFromInt32(offset, Type::i32)),
                 it->first.c_str(),
                 it->first.length() + 1
-            );            
+            );
             module->addDataSegment(std::move(dataSegment));
 
             // Update label offset map
@@ -187,6 +219,22 @@ private:
             offset += it->first.length() + 1;
             idx++;
         }
+    }
+
+    void writeLabelsToJsonFile(const std::string labelsFile) {
+        Output out(labelsFile, wasm::Flags::Text);
+
+        out << "{\n";
+        auto lastElement = --m_LabelOffsetMap.end();
+        for (auto it = m_LabelOffsetMap.begin(); it != m_LabelOffsetMap.end(); ++it) {
+            out << "  \"" << it->second << "\": \"" << it->first << "\"";
+            if (it != lastElement) {
+                out << ",\n";
+            } else {
+                out << "\n";
+            }
+        }
+        out << "}";
     }
 
     Expression* createLogCall(Expression* curr, Index functionIndex, size_t labelOffset) {
