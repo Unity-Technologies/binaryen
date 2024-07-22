@@ -47,12 +47,12 @@ struct InstrumentFunctions : public WalkerPass<PostWalker<InstrumentFunctions>> 
             "--instrument-functions=CONFIG");
 
         bool labelsInDataSections = options.hasArgument("instrument-functions-labels-in-data");
-        std::string labelsFile = options.getArgumentOrDefault("instrument-functions-labels-file", "labels.json");
-
+        
         parseConfiguration(configuration);
         if (labelsInDataSections) {
             insertLabelsToDataSection(curr);
         } else {
+            std::string labelsFile = options.getArgumentOrDefault("instrument-functions-labels-file", "labels.json");
             writeLabelsToJsonFile(labelsFile);
         }
 
@@ -118,63 +118,72 @@ private:
 
         // Load config from file if it starts with @
         if (configuration[0] == '@') {
-            std::ifstream stream(configuration.substr(1));
+           parseConfigurationFromFile(configuration.substr(1));
+        } else {
+           parseConfigurationFromString(configuration);
+        }
+    }
 
-            // Read config file line by line
-            size_t idx = 0;
-            for (std::string line; std::getline(stream, line);) {
-                // Skip empty lines
-                if (line == "")
-                    continue;
+    void parseConfigurationFromFile(const std::string& fileName) {
+        std::ifstream stream(fileName);
 
-                // Find ";" separator
-                size_t separatorIdx = line.find_first_of(";");
-                if (separatorIdx == std::string::npos) {
-                    Fatal() << "Invalid line in config file \"" << configuration << "\": "
-                        << line;
-                    break;
-                }
-                std::string functionName = line.substr(0, separatorIdx);
-                std::string label = line.substr(separatorIdx + 1);
+        if(!stream.is_open() || stream.fail())
+        {
+            Fatal() <<  "Unable to parse argument --instrument-functions.\nCan't open config file \"" << fileName << "\"";
+        }
 
-                // Insert function -> label map entry
-                m_FunctionToLabelMap[functionName] = label;
+        // Read config file line by line
+        size_t idx = 0;
+        for (std::string line; std::getline(stream, line);) {
+            // Skip empty lines
+            if (line == "")
+                continue;
 
-                // Add entry for label. Use index (will be replaced by offset if labels are placed in data section)
-                if (m_LabelOffsetMap.find(label) == m_LabelOffsetMap.end()) {
-                    m_LabelOffsetMap[label] = idx++;
-                }
+            // Find ";" separator
+            size_t separatorIdx = line.find_first_of(";");
+            if (separatorIdx == std::string::npos) {
+                Fatal() <<  "Unable to parse argument --instrument-functions.\nInvalid line in config file \"" << fileName << "\": "
+                    << line;
+                break;
+            }
+            std::string functionName = line.substr(0, separatorIdx);
+            std::string label = line.substr(separatorIdx + 1);
+
+            // Insert function -> label map entry
+            m_FunctionToLabelMap[functionName] = label;
+
+            // Add entry for label. Use index (will be replaced by offset if labels are placed in data section)
+            if (m_LabelOffsetMap.find(label) == m_LabelOffsetMap.end()) {
+                m_LabelOffsetMap[label] = idx++;
+            }
+        }
+    }
+
+    void parseConfigurationFromString(const std::string& configuration) {
+        size_t idx = 0;
+        size_t i = 0;
+        while (i < configuration.length()) {
+            size_t separatorIdx = configuration.find_first_of(";", i);
+            if (separatorIdx == std::string::npos) {
+                Fatal() << "Unable to parse argument --instrument-functions=\"" << configuration << "\"";
+                break;
             }
 
+            size_t nextSeparatorIdx = configuration.find_first_of(";", separatorIdx + 1);
+            if (nextSeparatorIdx == std::string::npos) {
+                // We reached the end of the config
+                nextSeparatorIdx = configuration.length();
+            }
+            std::string functionName = configuration.substr(i, separatorIdx - i);
+            std::string label = configuration.substr(separatorIdx + 1, nextSeparatorIdx - separatorIdx - 1);
+            i = nextSeparatorIdx + 1;
 
-            return;
-        } else {
-            // Parse configuration from string
-            size_t idx = 0;
-            size_t i = 0;
-            while (i < configuration.length()) {
-                size_t separatorIdx = configuration.find_first_of(";", i);
-                if (separatorIdx == std::string::npos) {
-                    Fatal() << "Invalid configuration \"" << configuration << "\"";
-                    break;
-                }
+            // Insert function -> label map entry
+            m_FunctionToLabelMap[functionName] = label;
 
-                size_t nextSeparatorIdx = configuration.find_first_of(";", separatorIdx + 1);
-                if (nextSeparatorIdx == std::string::npos) {
-                    // We reached the end of the config
-                    nextSeparatorIdx = configuration.length();
-                }
-                std::string functionName = configuration.substr(i, separatorIdx - i);
-                std::string label = configuration.substr(separatorIdx + 1, nextSeparatorIdx - separatorIdx - 1);
-                i = nextSeparatorIdx + 1;
-
-                // Insert function -> label map entry
-                m_FunctionToLabelMap[functionName] = label;
-
-                // Add entry for label. Use index (will be replaced by offset if labels are placed in data section)
-                if (m_LabelOffsetMap.find(label) == m_LabelOffsetMap.end()) {
-                    m_LabelOffsetMap[label] = idx++;
-                }
+            // Add entry for label. Use index (will be replaced by offset if labels are placed in data section)
+            if (m_LabelOffsetMap.find(label) == m_LabelOffsetMap.end()) {
+                m_LabelOffsetMap[label] = idx++;
             }
         }
     }
