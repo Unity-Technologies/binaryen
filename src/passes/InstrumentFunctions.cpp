@@ -25,6 +25,7 @@
 #include <map>
 #include <sstream>
 #include <string>
+#include <regex>
 #include "asmjs/shared-constants.h"
 #include "shared-constants.h"
 #include "pass.h"
@@ -86,6 +87,9 @@ struct InstrumentFunctions : public WalkerPass<PostWalker<InstrumentFunctions>> 
         for (auto& func: curr->functions) {
             m_FunctionIndexMap[func.get()] = m_FunctionIndex++;
         }
+
+        std::string functionMapFile = options.getArgumentOrDefault("instrument-functions-map-file", "functions.json");
+        writeFunctionMapFile(functionMapFile);
 
         PostWalker<InstrumentFunctions>::doWalkModule(curr);
     }
@@ -230,20 +234,46 @@ private:
         }
     }
 
-    void writeLabelsToJsonFile(const std::string labelsFile) {
+    void writeLabelsToJsonFile(const std::string& labelsFile) {
         Output out(labelsFile, wasm::Flags::Text);
 
         out << "{\n";
-        auto lastElement = --m_LabelOffsetMap.end();
-        for (auto it = m_LabelOffsetMap.begin(); it != m_LabelOffsetMap.end(); ++it) {
-            out << "  \"" << it->second << "\": \"" << it->first << "\"";
-            if (it != lastElement) {
-                out << ",\n";
-            } else {
-                out << "\n";
+        if (!m_LabelOffsetMap.empty()) {            
+            auto lastElement = --m_LabelOffsetMap.end();
+            for (auto it = m_LabelOffsetMap.begin(); it != m_LabelOffsetMap.end(); ++it) {
+                out << "  \"" << it->second << "\": \"" << it->first << "\"";
+                if (it != lastElement) {
+                    out << ",\n";
+                } else {
+                    out << "\n";
+                }
             }
         }
         out << "}";
+    }
+
+    void writeFunctionMapFile(const std::string& functionMapFile) {
+        Output out(functionMapFile, wasm::Flags::Text);
+
+        out << "{\n";
+        if (!m_FunctionIndexMap.empty()) {
+            auto lastElement = --m_FunctionIndexMap.end();
+            for (auto it = m_FunctionIndexMap.begin(); it != m_FunctionIndexMap.end(); ++it) {
+                out << "  \"" << it->second << "\": \"" << escapeFunctionName(it->first->name.toString()) << "\"";
+                if (it != lastElement) {
+                    out << ",\n";
+                } else {
+                    out << "\n";
+                }
+            }
+        }
+        out << "}";
+    }
+
+    std::string escapeFunctionName(const std::string& functionName) {
+        std::regex specialCharacters("\\\\(\\d+)");
+
+        return std::regex_replace(functionName, specialCharacters, "\\u00$1");
     }
 
     Expression* createLogCall(Expression* curr, Index functionIndex, size_t labelOffset) {
