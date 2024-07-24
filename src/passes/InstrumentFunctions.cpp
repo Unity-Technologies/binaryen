@@ -36,8 +36,7 @@
 namespace wasm {
 
 // function log_execution(functionId: number, labelId: number): void
-Name LoggerFunction("log_execution");
-
+std::string DefaultLoggerFunction("log_execution");
 
 struct InstrumentFunctions : public WalkerPass<PostWalker<InstrumentFunctions>> {
     void doWalkModule(Module* curr) {
@@ -48,7 +47,7 @@ struct InstrumentFunctions : public WalkerPass<PostWalker<InstrumentFunctions>> 
             "--instrument-functions=CONFIG");
 
         bool labelsInDataSections = options.hasArgument("instrument-functions-labels-in-data");
-        
+
         parseConfiguration(configuration);
         if (labelsInDataSections) {
             insertLabelsToDataSection(curr);
@@ -58,30 +57,9 @@ struct InstrumentFunctions : public WalkerPass<PostWalker<InstrumentFunctions>> 
         }
 
         // Add import of external log function
-        auto loggerFunctionImport = Builder::makeFunction(LoggerFunction, Signature(Type { Type::i32, Type::i32 }, Type::none), { });
-        loggerFunctionImport->base = LoggerFunction;
-
-        // Add it to "env" module if present
-        for (auto& func : curr->functions) {
-            if (func->imported() && func->module == ENV) {
-                loggerFunctionImport->module = func->module;
-                break;
-            }
-        }
-
-        // If "env" is not present add it to first module with imported functions
-        if (!loggerFunctionImport->module) {
-            for (auto& func : curr->functions) {
-                if (func->imported()) {
-                    loggerFunctionImport->module = func->module;
-                    break;
-                }
-            }
-        }
-        if (!loggerFunctionImport->module) {
-            loggerFunctionImport->module = ENV;
-        }
-        curr->addFunction(std::move(loggerFunctionImport));
+        m_LoggerFunctionName = options.getArgumentOrDefault("instrument-functions-logger-function", DefaultLoggerFunction);
+        m_ImportModule = options.getArgumentOrDefault("instrument-functions-logger-function-module", ENV.toString());
+        addLogCallImport(curr);
 
         // Create function index map up front
         for (auto& func: curr->functions) {
@@ -110,6 +88,8 @@ struct InstrumentFunctions : public WalkerPass<PostWalker<InstrumentFunctions>> 
         curr->body = createLogCall(curr->body, functionIndex, labelIndex);
     }
 private:
+    Name m_LoggerFunctionName;
+    IString m_ImportModule;
     std::map<std::string, size_t> m_LabelOffsetMap;
 
     Index m_FunctionIndex = 0;
@@ -238,7 +218,7 @@ private:
         Output out(labelsFile, wasm::Flags::Text);
 
         out << "{\n";
-        if (!m_LabelOffsetMap.empty()) {            
+        if (!m_LabelOffsetMap.empty()) {
             auto lastElement = --m_LabelOffsetMap.end();
             for (auto it = m_LabelOffsetMap.begin(); it != m_LabelOffsetMap.end(); ++it) {
                 out << "  \"" << it->second << "\": \"" << it->first << "\"";
@@ -250,6 +230,15 @@ private:
             }
         }
         out << "}";
+    }
+
+    void addLogCallImport(Module* module) {
+        // Add import of external log function
+        auto loggerFunctionImport = Builder::makeFunction(m_LoggerFunctionName, Signature(Type { Type::i32, Type::i32 }, Type::none), { });
+        loggerFunctionImport->base = m_LoggerFunctionName;
+        loggerFunctionImport->module = m_ImportModule;
+        
+        module->addFunction(std::move(loggerFunctionImport));
     }
 
     void writeFunctionMapFile(const std::string& functionMapFile) {
@@ -281,7 +270,7 @@ private:
 
         // Inject call to log function to original
         return builder.makeSequence(
-            builder.makeCall(LoggerFunction, { builder.makeConst(int32_t(functionIndex)), builder.makeConst(int32_t(labelOffset)) }, Type::none),
+            builder.makeCall(m_LoggerFunctionName, { builder.makeConst(int32_t(functionIndex)), builder.makeConst(int32_t(labelOffset)) }, Type::none),
             curr
         );
     }
