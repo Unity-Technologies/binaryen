@@ -204,6 +204,9 @@
 ;; CHECK-NEXT:   --inlining-optimizing                         inline functions and optimizes
 ;; CHECK-NEXT:                                                 where we inlined
 ;; CHECK-NEXT:
+;; CHECK-NEXT:   --instrument-functions                        instrument function body with
+;; CHECK-NEXT:                                                 log call
+;; CHECK-NEXT:
 ;; CHECK-NEXT:   --instrument-locals                           instrument the build with code
 ;; CHECK-NEXT:                                                 to intercept all loads and
 ;; CHECK-NEXT:                                                 stores
