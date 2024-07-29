@@ -234,10 +234,9 @@ void PassRegistry::registerPasses() {
   registerPass("i64-to-i32-lowering",
                "lower all uses of i64s to use i32s instead",
                createI64ToI32LoweringPass);
-  registerPass(
-    "instrument-functions",
-    "instrument function body with log call",
-    createInstrumentFunctionPass);
+  registerPass("instrument-functions",
+               "instrument function body with log call",
+               createInstrumentFunctionPass);
   registerPass(
     "instrument-locals",
     "instrument the build with code to intercept all loads and stores",
