@@ -52,6 +52,7 @@ set(passes_SOURCES
   I64ToI32Lowering.cpp
   Inlining.cpp
   InstrumentBranchHints.cpp
+  InstrumentFunctions.cpp
   InstrumentLocals.cpp
   InstrumentMemory.cpp
   Intrinsics.cpp
@@ -92,6 +93,7 @@ set(passes_SOURCES
   PrintCallGraph.cpp
   PrintFeatures.cpp
   PrintFunctionMap.cpp
+  RemoveFunctions.cpp
   RoundTrip.cpp
   SetGlobals.cpp
   SignaturePruning.cpp
@@ -104,6 +106,7 @@ set(passes_SOURCES
   TraceCalls.cpp
   RandomizeBranchHints.cpp
   RedundantSetElimination.cpp
+  RemoveUncalledFunctions.cpp
   RemoveImports.cpp
   RemoveMemoryInit.cpp
   RemoveNonJSOps.cpp

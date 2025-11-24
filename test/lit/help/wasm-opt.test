@@ -243,6 +243,9 @@
 ;; CHECK-NEXT:   --instrument-branch-hints                     instrument branch hints so we
 ;; CHECK-NEXT:                                                 can see which guessed right
 ;; CHECK-NEXT:
+;; CHECK-NEXT:   --instrument-functions                        instrument function body with
+;; CHECK-NEXT:                                                 log call
+;; CHECK-NEXT:
 ;; CHECK-NEXT:   --instrument-locals                           instrument the build with code
 ;; CHECK-NEXT:                                                 to intercept all loads and
 ;; CHECK-NEXT:                                                 stores
@@ -412,6 +415,9 @@
 ;; CHECK-NEXT:   --propagate-globals-globally                  propagate global values to other
 ;; CHECK-NEXT:                                                 globals (useful for tests)
 ;; CHECK-NEXT:
+;; CHECK-NEXT:   --remove-functions                            erases the given set of
+;; CHECK-NEXT:                                                 functions
+;; CHECK-NEXT:
 ;; CHECK-NEXT:   --remove-imports                              removes imports and replaces
 ;; CHECK-NEXT:                                                 them with nops
 ;; CHECK-NEXT:
@@ -422,6 +428,10 @@
 ;; CHECK-NEXT:
 ;; CHECK-NEXT:   --remove-non-js-ops                           removes operations incompatible
 ;; CHECK-NEXT:                                                 with js
+;; CHECK-NEXT:
+;; CHECK-NEXT:   --remove-uncalled-functions                   removes functions that were not
+;; CHECK-NEXT:                                                 executed during a runtime 
+;; CHECK-NEXT:                                                 coverage profiled run
 ;; CHECK-NEXT:
 ;; CHECK-NEXT:   --remove-unused-brs                           removes breaks from locations
 ;; CHECK-NEXT:                                                 that are not needed
