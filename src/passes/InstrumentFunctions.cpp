@@ -251,10 +251,12 @@ private:
 
   void addLogCallImport(Module* module) {
     // Add import of external log function
-    auto loggerFunctionImport =
-      Builder::makeFunction(m_LoggerFunctionName,
-                            Signature(Type{Type::i32, Type::i32}, Type::none),
-                            {});
+    auto loggerFunctionImport = Builder::makeFunction(
+      m_LoggerFunctionName,
+      Type(Signature(Type{Type::i32, Type::i32}, Type::none),
+           NonNullable,
+           Inexact),
+      {});
     loggerFunctionImport->base = m_LoggerFunctionName;
     loggerFunctionImport->module = m_ImportModule;
 
